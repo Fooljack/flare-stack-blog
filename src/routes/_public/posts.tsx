@@ -9,6 +9,7 @@ import theme from "@theme";
 import { postsInfiniteQueryOptions } from "@/features/posts/queries";
 import { blogConfig } from "@/blog.config";
 import { tagsQueryOptions } from "@/features/tags/queries";
+import { buildCanonicalHref, canonicalLink } from "@/lib/seo";
 
 const { postsPerPage } = theme.config.posts;
 
@@ -32,6 +33,9 @@ export const Route = createFileRoute("/_public/posts")({
 
     return {
       title: "全部文章",
+      canonicalHref: buildCanonicalHref("/posts", {
+        tagName: deps.tagName,
+      }),
     };
   },
   head: ({ loaderData }) => ({
@@ -44,6 +48,7 @@ export const Route = createFileRoute("/_public/posts")({
         content: blogConfig.description,
       },
     ],
+    links: [canonicalLink(loaderData?.canonicalHref ?? "/posts")],
   }),
 });
 

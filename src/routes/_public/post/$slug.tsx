@@ -3,6 +3,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { z } from "zod";
 import theme from "@theme";
 import { postBySlugQuery, relatedPostsQuery } from "@/features/posts/queries";
+import { buildCanonicalHref, canonicalLink } from "@/lib/seo";
 
 const searchSchema = z.object({
   highlightCommentId: z.coerce.number().optional(),
@@ -27,22 +28,32 @@ export const Route = createFileRoute("/_public/post/$slug")({
 
     if (!post) throw notFound();
 
-    return post;
+    return {
+      post,
+      canonicalHref: buildCanonicalHref(
+        `/post/${encodeURIComponent(post.slug)}`,
+      ),
+    };
   },
-  head: ({ loaderData: post }) => ({
-    meta: [
-      {
-        title: post?.title,
-      },
-      {
-        name: "description",
-        content: post?.summary ?? "",
-      },
-      { property: "og:title", content: post?.title ?? "" },
-      { property: "og:description", content: post?.summary ?? "" },
-      { property: "og:type", content: "article" },
-    ],
-  }),
+  head: ({ loaderData }) => {
+    const post = loaderData?.post;
+
+    return {
+      meta: [
+        {
+          title: post?.title,
+        },
+        {
+          name: "description",
+          content: post?.summary ?? "",
+        },
+        { property: "og:title", content: post?.title ?? "" },
+        { property: "og:description", content: post?.summary ?? "" },
+        { property: "og:type", content: "article" },
+      ],
+      links: [canonicalLink(loaderData?.canonicalHref ?? "/")],
+    };
+  },
   pendingComponent: () => <theme.PostPageSkeleton />,
   pendingMs: __THEME_CONFIG__.pendingMs,
 });

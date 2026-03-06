@@ -2,6 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import theme from "@theme";
 import { featuredPostsQuery } from "@/features/posts/queries";
+import { canonicalLink } from "@/lib/seo";
 
 const { featuredPostsLimit } = theme.config.home;
 
@@ -10,7 +11,14 @@ export const Route = createFileRoute("/_public/")({
     await context.queryClient.ensureQueryData(
       featuredPostsQuery(featuredPostsLimit),
     );
+
+    return {
+      canonicalHref: "/",
+    };
   },
+  head: ({ loaderData }) => ({
+    links: [canonicalLink(loaderData?.canonicalHref ?? "/")],
+  }),
   pendingComponent: HomePageSkeleton,
   component: HomeRoute,
 });
