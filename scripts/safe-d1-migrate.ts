@@ -202,27 +202,42 @@ function d1ScopeArgs(target: Target, persistTo?: string) {
   return args;
 }
 
+function writeQueryFile(sql: string) {
+  const queryPath = path.join(
+    tmpDir,
+    `d1-query-${timestampLabel()}-${Math.random().toString(36).slice(2, 8)}.sql`,
+  );
+  fs.writeFileSync(queryPath, `${sql.trim()}\n`);
+  return queryPath;
+}
+
 function executeSingleRow<Row extends Record<string, number | string | null>>(
   database: string,
   sql: string,
   target: Target,
   persistTo?: string,
 ) {
-  const output = runWranglerJson<D1ExecuteResult<Row>>([
-    "d1",
-    "execute",
-    database,
-    ...d1ScopeArgs(target, persistTo),
-    "--command",
-    sql,
-  ]);
+  const queryPath = writeQueryFile(sql);
 
-  const row = output[0]?.results[0];
-  if (!row) {
-    throw new Error(`Query returned no rows: ${sql}`);
+  try {
+    const output = runWranglerJson<D1ExecuteResult<Row>>([
+      "d1",
+      "execute",
+      database,
+      ...d1ScopeArgs(target, persistTo),
+      "--file",
+      queryPath,
+    ]);
+
+    const row = output[0]?.results[0];
+    if (!row) {
+      throw new Error(`Query returned no rows: ${sql}`);
+    }
+
+    return row;
+  } finally {
+    fs.rmSync(queryPath, { force: true });
   }
-
-  return row;
 }
 
 function toNumberRecord<T extends Record<string, number>>(
