@@ -34,6 +34,11 @@
       "binding": "KV",
       "id": "KV_NAMESPACE_ID",
       "remote": true
+    },
+    {
+      "binding": "OAUTH_KV",
+      "id": "KV_NAMESPACE_ID",
+      "remote": true
     }
   ],
   "workflows": [
@@ -122,6 +127,9 @@
       "kv_namespaces": [
         {
           "binding": "KV"
+        },
+        {
+          "binding": "OAUTH_KV"
         }
       ],
       "r2_buckets": [

@@ -1,12 +1,17 @@
-import { oauthProvider } from "@better-auth/oauth-provider";
-import { jwt } from "better-auth/plugins";
+import {
+  getOAuthApi,
+  type OAuthHelpers,
+  type OAuthProviderOptions,
+} from "@cloudflare/workers-oauth-provider";
 import { seconds } from "@/lib/duration";
 import { flattenBlogScopes } from "./service/oauth-provider.scope";
 
 export const OAUTH_PROVIDER_LOGIN_PAGE = "/login";
 export const OAUTH_PROVIDER_CONSENT_PAGE = "/oauth/consent";
-export const OAUTH_JWKS_PATH = "/.well-known/jwks.json";
-export const OAUTH_ACCESS_TOKEN_EXPIRES_IN = seconds("365d");
+export const OAUTH_TOKEN_PATH = "/oauth/token";
+export const OAUTH_CLIENT_REGISTRATION_PATH = "/oauth/register";
+export const OAUTH_ACCESS_TOKEN_EXPIRES_IN = seconds("1h");
+export const OAUTH_REFRESH_TOKEN_EXPIRES_IN = seconds("30d");
 
 const OAUTH_STANDARD_SCOPE_VALUES = [
   "openid",
@@ -55,43 +60,52 @@ export const OAUTH_DEFAULT_CLIENT_SCOPES: OAuthScope[] = [
 ];
 
 export function getOAuthAuthorizationServerUrl(baseURL: string) {
-  return new URL("/api/auth", baseURL).toString();
+  return new URL(baseURL).origin;
 }
 
 export function getOAuthProtectedResourceUrl(baseURL: string) {
   return new URL("/", baseURL).toString();
 }
 
-export function getOAuthJwksUrl(baseURL: string) {
-  return `${getOAuthAuthorizationServerUrl(baseURL)}${OAUTH_JWKS_PATH}`;
+type OAuthFetchHandler = ExportedHandler<Env> &
+  Pick<Required<ExportedHandler<Env>>, "fetch">;
+
+const oauthHelpersFallbackHandler: OAuthFetchHandler = {
+  fetch: () => new Response("Not Found", { status: 404 }),
+};
+
+export function createWorkersOAuthProviderOptions(
+  handlers: Pick<OAuthProviderOptions<Env>, "apiHandlers" | "defaultHandler">,
+): OAuthProviderOptions<Env> {
+  return {
+    ...handlers,
+    accessTokenTTL: OAUTH_ACCESS_TOKEN_EXPIRES_IN,
+    allowPlainPKCE: false,
+    authorizeEndpoint: OAUTH_PROVIDER_CONSENT_PAGE,
+    clientRegistrationEndpoint: OAUTH_CLIENT_REGISTRATION_PATH,
+    refreshTokenTTL: OAUTH_REFRESH_TOKEN_EXPIRES_IN,
+    resourceMetadata: {
+      scopes_supported: OAUTH_BLOG_SCOPES,
+    },
+    scopesSupported: OAUTH_PROVIDER_SCOPES,
+    tokenEndpoint: OAUTH_TOKEN_PATH,
+  };
 }
 
-export function createOAuthJwtPlugin(baseURL: string) {
-  return jwt({
-    disableSettingJwtHeader: true,
-    jwks: {
-      jwksPath: OAUTH_JWKS_PATH,
-    },
-    jwt: {
-      issuer: getOAuthAuthorizationServerUrl(baseURL),
-    },
-  });
-}
+export function getOAuthHelpers(env: Env): OAuthHelpers {
+  const existingHelpers = env.OAUTH_PROVIDER;
 
-export function createOAuthProviderPlugin(baseURL: string) {
-  return oauthProvider({
-    accessTokenExpiresIn: OAUTH_ACCESS_TOKEN_EXPIRES_IN,
-    loginPage: OAUTH_PROVIDER_LOGIN_PAGE,
-    consentPage: OAUTH_PROVIDER_CONSENT_PAGE,
-    scopes: OAUTH_PROVIDER_SCOPES,
-    validAudiences: [getOAuthProtectedResourceUrl(baseURL)],
-    allowDynamicClientRegistration: true,
-    allowUnauthenticatedClientRegistration: true,
-    clientRegistrationDefaultScopes: OAUTH_DEFAULT_CLIENT_SCOPES,
-    clientRegistrationAllowedScopes: OAUTH_PROVIDER_SCOPES,
-    clientCredentialGrantDefaultScopes: OAUTH_DEFAULT_CLIENT_SCOPES,
-    silenceWarnings: {
-      oauthAuthServerConfig: true,
-    },
-  });
+  if (existingHelpers) {
+    return existingHelpers;
+  }
+
+  return getOAuthApi(
+    createWorkersOAuthProviderOptions({
+      apiHandlers: {
+        "/_oauth": oauthHelpersFallbackHandler,
+      },
+      defaultHandler: oauthHelpersFallbackHandler,
+    }),
+    env,
+  );
 }
